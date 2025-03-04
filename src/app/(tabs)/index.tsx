@@ -2,6 +2,7 @@ import { StyleSheet, FlatList, RefreshControl } from "react-native";
 import { View } from "@/components/Themed";
 import Post from "@/components/Post";
 import { useEffect, useState } from "react";
+import { getPosts } from "@/lib/db/posts";
 
 interface Post {
   id: number;

@@ -1,0 +1,67 @@
+diff --git a/src/app/(tabs)/create.tsx b/src/app/(tabs)/create.tsx
+index 13c690f..79dcd29 100644
+--- a/src/app/(tabs)/create.tsx
++++ b/src/app/(tabs)/create.tsx
+@@ -2,6 +2,7 @@ import { StyleSheet } from "react-native";
+ import { View } from "@/components/Themed";
+ import CreatePost from "@/components/CreatePost";
+ import { router } from "expo-router";
++import { createPost } from "@/lib/db/posts";
+ 
+ export default function CreatePostScreen() {
+   const handleSubmit = async (imageUrl: string, description: string) => {
+diff --git a/src/app/(tabs)/index.tsx b/src/app/(tabs)/index.tsx
+index 8297f9f..d1d1758 100644
+--- a/src/app/(tabs)/index.tsx
++++ b/src/app/(tabs)/index.tsx
+@@ -2,6 +2,7 @@ import { StyleSheet, FlatList, RefreshControl } from "react-native";
+ import { View } from "@/components/Themed";
+ import Post from "@/components/Post";
+ import { useEffect, useState } from "react";
++import { getPosts } from "@/lib/db/posts";
+ 
+ interface Post {
+   id: number;
+diff --git a/src/lib/db/posts.ts b/src/lib/db/posts.ts
+new file mode 100644
+index 0000000..19bbb5e
+--- /dev/null
++++ b/src/lib/db/posts.ts
+@@ -0,0 +1,14 @@
++import db from './db';
++import { posts, type Post } from './schema';
++import { desc } from 'drizzle-orm';
++
++export async function createPost(imageUrl: string, description: string): Promise<void> {
++  await db.insert(posts).values({
++    imageUrl,
++    description: description || null,
++  });
++}
++
++export async function getPosts(): Promise<Post[]> {
++  return await db.select().from(posts).orderBy(desc(posts.createdAt));
++}
+\ No newline at end of file
+diff --git a/src/lib/db/schema.ts b/src/lib/db/schema.ts
+index 1d8efe0..dc331e9 100644
+--- a/src/lib/db/schema.ts
++++ b/src/lib/db/schema.ts
+@@ -12,6 +12,17 @@ export const users = sqliteTable("users", {
+     .notNull(),
+ });
+ 
++export const posts = sqliteTable("posts", {
++  id: integer("id").primaryKey({ autoIncrement: true }),
++  imageUrl: text("image_url").notNull(),
++  description: text("description"),
++  createdAt: integer("created_at", { mode: "timestamp" })
++    .default(sql`CURRENT_TIMESTAMP`)
++    .notNull(),
++});
++
+ // Types for TypeScript
+ export type User = typeof users.$inferSelect;
+ export type NewUser = typeof users.$inferInsert;
++export type Post = typeof posts.$inferSelect;
++export type NewPost = typeof posts.$inferInsert;

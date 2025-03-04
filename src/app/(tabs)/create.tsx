@@ -2,6 +2,7 @@ import { StyleSheet } from "react-native";
 import { View } from "@/components/Themed";
 import CreatePost from "@/components/CreatePost";
 import { router } from "expo-router";
+import { createPost } from "@/lib/db/posts";
 
 export default function CreatePostScreen() {
   const handleSubmit = async (imageUrl: string, description: string) => {
