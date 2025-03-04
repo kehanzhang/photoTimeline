@@ -1,0 +1,401 @@
+diff --git a/drizzle/0001_posts.sql b/drizzle/0001_posts.sql
+new file mode 100644
+index 0000000..22ae3a8
+--- /dev/null
++++ b/drizzle/0001_posts.sql
+@@ -0,0 +1,7 @@
++CREATE TABLE `posts` (
++    `id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
++    `image_url` text NOT NULL,
++    `description` text,
++    `created_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL,
++    `updated_at` integer DEFAULT CURRENT_TIMESTAMP NOT NULL
++);
+\ No newline at end of file
+diff --git a/src/app/(tabs)/_layout.tsx b/src/app/(tabs)/_layout.tsx
+index 20051b8..d377575 100644
+--- a/src/app/(tabs)/_layout.tsx
++++ b/src/app/(tabs)/_layout.tsx
+@@ -30,43 +30,15 @@ export default function TabLayout() {
+       <Tabs.Screen
+         name="index"
+         options={{
+-          title: "Tab One",
+-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+-          headerRight: () => (
+-            <Link href="/modal" asChild>
+-              <Pressable>
+-                {({ pressed }) => (
+-                  <FontAwesome
+-                    name="info-circle"
+-                    size={25}
+-                    color={Colors[colorScheme ?? "light"].text}
+-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
+-                  />
+-                )}
+-              </Pressable>
+-            </Link>
+-          ),
++          title: "Timeline",
++          tabBarIcon: ({ color }) => <TabBarIcon name="clock-o" color={color} />,
+         }}
+       />
+       <Tabs.Screen
+-        name="two"
++        name="create"
+         options={{
+-          title: "Tab Two",
+-          tabBarIcon: ({ color }) => <TabBarIcon name="code" color={color} />,
+-          headerRight: () => (
+-            <Link href="/sheet" asChild>
+-              <Pressable>
+-                {({ pressed }) => (
+-                  <FontAwesome
+-                    name="info-circle"
+-                    size={25}
+-                    color={Colors[colorScheme ?? "light"].text}
+-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
+-                  />
+-                )}
+-              </Pressable>
+-            </Link>
+-          ),
++          title: "Create Post",
++          tabBarIcon: ({ color }) => <TabBarIcon name="plus-square-o" color={color} />,
+         }}
+       />
+     </Tabs>
+diff --git a/src/app/(tabs)/create.tsx b/src/app/(tabs)/create.tsx
+new file mode 100644
+index 0000000..13c690f
+--- /dev/null
++++ b/src/app/(tabs)/create.tsx
+@@ -0,0 +1,28 @@
++import { StyleSheet } from "react-native";
++import { View } from "@/components/Themed";
++import CreatePost from "@/components/CreatePost";
++import { router } from "expo-router";
++
++export default function CreatePostScreen() {
++  const handleSubmit = async (imageUrl: string, description: string) => {
++    try {
++      await createPost(imageUrl, description);
++      router.push("/");
++    } catch (error) {
++      console.error('Error creating post:', error);
++    }
++  };
++
++  return (
++    <View style={styles.container}>
++      <CreatePost onSubmit={handleSubmit} />
++    </View>
++  );
++}
++
++const styles = StyleSheet.create({
++  container: {
++    flex: 1,
++    backgroundColor: '#fff',
++  },
++});
+\ No newline at end of file
+diff --git a/src/app/(tabs)/index.tsx b/src/app/(tabs)/index.tsx
+index d39e034..8297f9f 100644
+--- a/src/app/(tabs)/index.tsx
++++ b/src/app/(tabs)/index.tsx
+@@ -1,18 +1,54 @@
+-import { StyleSheet } from "react-native";
++import { StyleSheet, FlatList, RefreshControl } from "react-native";
++import { View } from "@/components/Themed";
++import Post from "@/components/Post";
++import { useEffect, useState } from "react";
+ 
+-import EditScreenInfo from "@/components/EditScreenInfo";
+-import { Text, View } from "@/components/Themed";
++interface Post {
++  id: number;
++  imageUrl: string;
++  description: string | null;
++  createdAt: number;
++}
++
++export default function TimelineScreen() {
++  const [posts, setPosts] = useState<Post[]>([]);
++  const [refreshing, setRefreshing] = useState(false);
++
++  const fetchPosts = async () => {
++    try {
++      const posts = await getPosts();
++      setPosts(posts);
++    } catch (error) {
++      console.error('Error fetching posts:', error);
++    }
++  };
++
++  useEffect(() => {
++    fetchPosts();
++  }, []);
++
++  const onRefresh = async () => {
++    setRefreshing(true);
++    await fetchPosts();
++    setRefreshing(false);
++  };
+ 
+-export default function TabOneScreen() {
+   return (
+     <View style={styles.container}>
+-      <Text style={styles.title}>Tab One</Text>
+-      <View
+-        style={styles.separator}
+-        lightColor="#eee"
+-        darkColor="rgba(255,255,255,0.1)"
++      <FlatList
++        data={posts}
++        keyExtractor={(item) => item.id.toString()}
++        renderItem={({ item }) => (
++          <Post
++            imageUrl={item.imageUrl}
++            description={item.description || undefined}
++            createdAt={item.createdAt}
++          />
++        )}
++        refreshControl={
++          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
++        }
+       />
+-      <EditScreenInfo path="app/(tabs)/index.tsx" />
+     </View>
+   );
+ }
+@@ -20,16 +56,6 @@ export default function TabOneScreen() {
+ const styles = StyleSheet.create({
+   container: {
+     flex: 1,
+-    alignItems: "center",
+-    justifyContent: "center",
+-  },
+-  title: {
+-    fontSize: 20,
+-    fontWeight: "bold",
+-  },
+-  separator: {
+-    marginVertical: 30,
+-    height: 1,
+-    width: "80%",
++    backgroundColor: '#fff',
+   },
+ });
+diff --git a/src/components/CreatePost.tsx b/src/components/CreatePost.tsx
+new file mode 100644
+index 0000000..9bc7d08
+--- /dev/null
++++ b/src/components/CreatePost.tsx
+@@ -0,0 +1,112 @@
++import React, { useState } from 'react';
++import { View, StyleSheet, TextInput, Image, TouchableOpacity, Platform } from 'react-native';
++import { Text } from './Themed';
++import * as ImagePicker from 'expo-image-picker';
++import FontAwesome from "@expo/vector-icons/FontAwesome";
++
++interface CreatePostProps {
++  onSubmit: (imageUrl: string, description: string) => void;
++}
++
++export default function CreatePost({ onSubmit }: CreatePostProps) {
++  const [image, setImage] = useState<string | null>(null);
++  const [description, setDescription] = useState('');
++
++  const pickImage = async () => {
++    const result = await ImagePicker.launchImageLibraryAsync({
++      mediaTypes: ImagePicker.MediaTypeOptions.Images,
++      allowsEditing: true,
++      aspect: [1, 1],
++      quality: 1,
++    });
++
++    if (!result.canceled) {
++      setImage(result.assets[0].uri);
++    }
++  };
++
++  const handleSubmit = () => {
++    if (image) {
++      onSubmit(image, description);
++      setImage(null);
++      setDescription('');
++    }
++  };
++
++  return (
++    <View style={styles.container}>
++      <TouchableOpacity style={styles.imagePickerButton} onPress={pickImage}>
++        {image ? (
++          <Image source={{ uri: image }} style={styles.previewImage} />
++        ) : (
++          <View style={styles.placeholder}>
++            <FontAwesome name="camera" size={40} color="#666" />
++            <Text style={styles.placeholderText}>Tap to select an image</Text>
++          </View>
++        )}
++      </TouchableOpacity>
++      <TextInput
++        style={styles.input}
++        placeholder="Write a description..."
++        value={description}
++        onChangeText={setDescription}
++        multiline
++      />
++      <TouchableOpacity
++        style={[styles.submitButton, !image && styles.submitButtonDisabled]}
++        onPress={handleSubmit}
++        disabled={!image}
++      >
++        <Text style={styles.submitButtonText}>Post</Text>
++      </TouchableOpacity>
++    </View>
++  );
++}
++
++const styles = StyleSheet.create({
++  container: {
++    padding: 20,
++  },
++  imagePickerButton: {
++    width: '100%',
++    height: 300,
++    backgroundColor: '#f0f0f0',
++    borderRadius: 10,
++    overflow: 'hidden',
++  },
++  previewImage: {
++    width: '100%',
++    height: '100%',
++  },
++  placeholder: {
++    flex: 1,
++    justifyContent: 'center',
++    alignItems: 'center',
++  },
++  placeholderText: {
++    marginTop: 10,
++    color: '#666',
++  },
++  input: {
++    marginTop: 20,
++    padding: 15,
++    backgroundColor: '#f0f0f0',
++    borderRadius: 10,
++    minHeight: 100,
++    textAlignVertical: 'top',
++  },
++  submitButton: {
++    marginTop: 20,
++    backgroundColor: '#0095f6',
++    padding: 15,
++    borderRadius: 10,
++    alignItems: 'center',
++  },
++  submitButtonDisabled: {
++    opacity: 0.5,
++  },
++  submitButtonText: {
++    color: 'white',
++    fontWeight: 'bold',
++  },
++});
+\ No newline at end of file
+diff --git a/src/components/Post.tsx b/src/components/Post.tsx
+new file mode 100644
+index 0000000..d135508
+--- /dev/null
++++ b/src/components/Post.tsx
+@@ -0,0 +1,41 @@
++import React from 'react';
++import { View, Image, StyleSheet, Dimensions } from 'react-native';
++import { Text } from './Themed';
++
++interface PostProps {
++  imageUrl: string;
++  description?: string;
++  createdAt: number;
++}
++
++export default function Post({ imageUrl, description, createdAt }: PostProps) {
++  const formattedDate = new Date(createdAt).toLocaleString();
++
++  return (
++    <View style={styles.container}>
++      <Text style={styles.timestamp}>{formattedDate}</Text>
++      <Image source={{ uri: imageUrl }} style={styles.image} />
++      {description && <Text style={styles.description}>{description}</Text>}
++    </View>
++  );
++}
++
++const styles = StyleSheet.create({
++  container: {
++    width: '100%',
++    marginBottom: 20,
++  },
++  image: {
++    width: Dimensions.get('window').width,
++    height: Dimensions.get('window').width,
++  },
++  description: {
++    padding: 15,
++    fontSize: 16,
++  },
++  timestamp: {
++    padding: 10,
++    fontSize: 14,
++    color: '#666',
++  },
++});
+\ No newline at end of file
+diff --git a/src/lib/db.ts b/src/lib/db.ts
+new file mode 100644
+index 0000000..f0417f5
+--- /dev/null
++++ b/src/lib/db.ts
+@@ -0,0 +1,38 @@
++import { drizzle } from 'drizzle-orm/sqlite';
++import { sql } from 'drizzle-orm';
++import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
++
++// Define the posts table schema
++export const posts = sqliteTable('posts', {
++  id: integer('id').primaryKey({ autoIncrement: true }),
++  imageUrl: text('image_url').notNull(),
++  description: text('description'),
++  createdAt: integer('created_at', { mode: 'timestamp' })
++    .notNull()
++    .default(sql`CURRENT_TIMESTAMP`),
++  updatedAt: integer('updated_at', { mode: 'timestamp' })
++    .notNull()
++    .default(sql`CURRENT_TIMESTAMP`),
++});
++
++// TODO: Initialize SQLite database connection
++// For now, we'll use mock data and localStorage
++export const getPosts = async () => {
++  const storedPosts = localStorage.getItem('posts');
++  return storedPosts ? JSON.parse(storedPosts) : [];
++};
++
++export const createPost = async (imageUrl: string, description: string | null) => {
++  const storedPosts = await getPosts();
++  const newPost = {
++    id: Date.now(),
++    imageUrl,
++    description,
++    createdAt: Date.now(),
++    updatedAt: Date.now(),
++  };
++  
++  const updatedPosts = [newPost, ...storedPosts];
++  localStorage.setItem('posts', JSON.stringify(updatedPosts));
++  return newPost;
++};
+\ No newline at end of file

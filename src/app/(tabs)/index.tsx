@@ -1,18 +1,54 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, FlatList, RefreshControl } from "react-native";
+import { View } from "@/components/Themed";
+import Post from "@/components/Post";
+import { useEffect, useState } from "react";
 
-import EditScreenInfo from "@/components/EditScreenInfo";
-import { Text, View } from "@/components/Themed";
+interface Post {
+  id: number;
+  imageUrl: string;
+  description: string | null;
+  createdAt: number;
+}
 
-export default function TabOneScreen() {
+export default function TimelineScreen() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchPosts = async () => {
+    try {
+      const posts = await getPosts();
+      setPosts(posts);
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchPosts();
+    setRefreshing(false);
+  };
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tab One</Text>
-      <View
-        style={styles.separator}
-        lightColor="#eee"
-        darkColor="rgba(255,255,255,0.1)"
+      <FlatList
+        data={posts}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <Post
+            imageUrl={item.imageUrl}
+            description={item.description || undefined}
+            createdAt={item.createdAt}
+          />
+        )}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       />
-      <EditScreenInfo path="app/(tabs)/index.tsx" />
     </View>
   );
 }
@@ -20,16 +56,6 @@ export default function TabOneScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: "80%",
+    backgroundColor: '#fff',
   },
 });
